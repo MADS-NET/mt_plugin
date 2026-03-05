@@ -17,8 +17,15 @@
 #include <sink.hpp>
 #include <nlohmann/json.hpp>
 #include <pugg/Kernel.h>
+#include "machine_viewer.hpp"
 
 // other includes as needed here
+#include <array>
+#include <chrono>
+#include <memory>
+#include <sstream>
+#include <stdexcept>
+#include <thread>
 
 // Define the name of the plugin
 #ifndef PLUGIN_NAME
@@ -47,7 +54,42 @@ public:
   // return_type::error: _error is traced, skip process
   // return_type::critical: execution stops
   return_type load_data(json const &input, string topic = "", vector<unsigned char> const *blob = nullptr) override {
-    // Do something with the input data
+    (void)topic;
+    (void)blob;
+
+    if (!_viewer) {
+      _error = "MachineViewer is not initialized. Check plugin parameters.";
+      return return_type::error;
+    }
+
+    try {
+      if (!input.contains("position")) {
+        _error = "Input JSON is missing 'position' field.";
+        return return_type::warning;
+      }
+
+      const auto position = parse_position(input.at("position"));
+      _viewer->update_position(position);
+
+      if (input.contains("metrics")) {
+        if (!input.at("metrics").is_object()) {
+          _error = "Input field 'metrics' must be an object of scalar values.";
+          return return_type::warning;
+        }
+
+        for (const auto& [name, value] : input.at("metrics").items()) {
+          if (!value.is_number()) {
+            _error = "Metric '" + name + "' is not numeric.";
+            return return_type::warning;
+          }
+          _viewer->log_scalar(name, value.get<double>());
+        }
+      }
+    } catch (const exception& ex) {
+      _error = string("Failed to process input: ") + ex.what();
+      return return_type::error;
+    }
+
     return return_type::success;
   }
 
@@ -56,14 +98,48 @@ public:
     // (e.g. agent_id, etc.)
     Sink::set_params(params);
 
-    // provide sensible defaults for the parameters by setting e.g.
-    _params["some_field"] = "default_value";
-    // more here...
+    _params["models_path"] = "models";
+    _params["recording_name"] = "machinetool";
+    _params["stacking"] = {
+      {"x", "ground"},
+      {"z", "x"},
+      {"y", "z"},
+    };
+    _params["model_files"] = {
+      {"ground", "ground.obj"},
+      {"x", "x_axis.obj"},
+      {"y", "y_axis.obj"},
+      {"z", "z_axis.obj"},
+    };
+    _params["initial_position"] = {0.0, 0.0, 0.0};
 
     // then merge the defaults with the actually provided parameters
     // params needs to be cast to json
     _params.merge_patch(params);
-    
+
+    // Finally, initialize members hereafter
+    try {
+      auto models_path = _params.at("models_path").get<string>();
+      auto recording_name = _params.at("recording_name").get<string>();
+      auto stacking = parse_map_field(_params.at("stacking"), "stacking");
+      auto model_files = parse_map_field(_params.at("model_files"), "model_files");
+      auto initial_position = parse_position(_params.at("initial_position"));
+
+      _viewer = make_unique<MachineViewer>(models_path, stacking, model_files, recording_name);
+      _viewer->update_position(initial_position);
+
+      _init_info["models_path"] = models_path;
+      _init_info["recording_name"] = recording_name;
+      _init_info["stacking"] = _params.at("stacking").dump();
+      _init_info["model_files"] = _params.at("model_files").dump();
+      _init_info["initial_position"] = _params.at("initial_position").dump();
+      _init_info["viewer_initialized"] = "true";
+    } catch (const exception& ex) {
+      _viewer.reset();
+      _init_info["viewer_initialized"] = "false";
+      _init_info["initialization_error"] = ex.what();
+      _error = string("Failed to initialize MachineViewer: ") + ex.what();
+    }
   }
 
   // Implement this method if you want to provide additional information
@@ -72,13 +148,39 @@ public:
     // it is used to print the information about the plugin when it is loaded
     // by the agent
     
-    return {};
+    return _init_info;
     
   };
 
 private:
-  // Define the fields that are used to store internal resources
-  
+  static map<string, string> parse_map_field(const json& value, const string& field_name) {
+    if (!value.is_object()) {
+      throw invalid_argument("Field '" + field_name + "' must be an object.");
+    }
+
+    map<string, string> out;
+    for (const auto& [key, element] : value.items()) {
+      if (!element.is_string()) {
+        throw invalid_argument("Field '" + field_name + "." + key + "' must be a string.");
+      }
+      out[key] = element.get<string>();
+    }
+    return out;
+  }
+
+  static array<double, 3> parse_position(const json& value) {
+    if (!value.is_array() || value.size() != 3) {
+      throw invalid_argument("Position must be an array of exactly 3 numbers.");
+    }
+    if (!value[0].is_number() || !value[1].is_number() || !value[2].is_number()) {
+      throw invalid_argument("Position array must contain only numeric values.");
+    }
+
+    return {value[0].get<double>(), value[1].get<double>(), value[2].get<double>()};
+  }
+
+  unique_ptr<MachineViewer> _viewer;
+  map<string, string> _init_info;
 };
 
 
@@ -105,17 +207,48 @@ INSTALL_SINK_DRIVER(MachinetoolPlugin, json)
 For testing purposes, when directly executing the plugin
 */
 int main(int argc, char const *argv[]) {
-  MachinetoolPlugin plugin;
-  json input, params;
-  
-  // Set example values to params
-  params["test"] = "value";
+  try {
+    MachinetoolPlugin plugin;
+    json params;
 
-  // Set the parameters
-  plugin.set_params(params);
+    params["models_path"] = argc > 1 ? argv[1] : "models";
+    params["stacking"] = {
+      {"x", "ground"},
+      {"z", "x"},
+      {"y", "z"},
+    };
+    params["model_files"] = {
+      {"ground", "ground.obj"},
+      {"x", "x_axis.obj"},
+      {"y", "y_axis.obj"},
+      {"z", "z_axis.obj"},
+    };
+    params["initial_position"] = {0.0, 0.0, 0.0};
+    params["recording_name"] = "machinetool_plugin_test";
 
-  // Process data
-  plugin.load_data(input);
+    plugin.set_params(params);
+
+    constexpr int total_steps = 50;
+    constexpr chrono::milliseconds tick{100};
+    for (int i = 0; i <= total_steps; ++i) {
+      const double alpha = static_cast<double>(i) / static_cast<double>(total_steps);
+      const double position = 0.5 * alpha;
+      json input;
+      input["position"] = {position, position, position};
+      input["metrics"] = {{"progress", alpha}};
+
+      const auto result = plugin.load_data(input);
+      if (result != return_type::success) {
+        return 1;
+      }
+
+      if (i < total_steps) {
+        this_thread::sleep_for(tick);
+      }
+    }
+  } catch (const exception&) {
+    return 1;
+  }
 
   return 0;
 }
