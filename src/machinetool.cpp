@@ -71,6 +71,25 @@ public:
       const auto position = parse_position(input.at("position"));
       _viewer->update_position(position);
 
+      if (input.contains("tool")) {
+        if (!input.at("tool").is_object()) {
+          _error = "Input field 'tool' must be an object with 'length' and 'diameter'.";
+          return return_type::warning;
+        }
+
+        const auto& tool = input.at("tool");
+        if (!tool.contains("length") || !tool.contains("diameter")) {
+          _error = "Input field 'tool' must contain both 'length' and 'diameter'.";
+          return return_type::warning;
+        }
+        if (!tool.at("length").is_number() || !tool.at("diameter").is_number()) {
+          _error = "Input fields 'tool.length' and 'tool.diameter' must be numeric.";
+          return return_type::warning;
+        }
+
+        _viewer->load_tool(tool.at("length").get<double>(), tool.at("diameter").get<double>());
+      }
+
       if (input.contains("metrics")) {
         if (!input.at("metrics").is_object()) {
           _error = "Input field 'metrics' must be an object of scalar values.";
@@ -112,6 +131,7 @@ public:
       {"z", "z_axis.obj"},
     };
     _params["initial_position"] = {0.0, 0.0, 0.0};
+    _params["tool"] = json::object();
 
     // then merge the defaults with the actually provided parameters
     // params needs to be cast to json
@@ -124,21 +144,39 @@ public:
       auto stacking = parse_map_field(_params.at("stacking"), "stacking");
       auto model_files = parse_map_field(_params.at("model_files"), "model_files");
       auto initial_position = parse_position(_params.at("initial_position"));
+      if (_params.contains("tool_z_offset")) {
+        throw invalid_argument(
+          "Field 'tool_z_offset' is no longer supported. Use 'tool.z_offset' instead."
+        );
+      }
+      const auto tool = parse_setup_tool(_params.at("tool"));
 
-      _viewer = make_unique<MachineViewer>(models_path, stacking, model_files, recording_name);
+      _viewer = make_unique<MachineViewer>(
+        models_path,
+        stacking,
+        model_files,
+        recording_name,
+        tool.z_offset
+      );
       _viewer->update_position(initial_position);
+      if (tool.has_geometry) {
+        _viewer->load_tool(tool.length, tool.diameter);
+      }
 
       _init_info["models_path"] = models_path;
       _init_info["recording_name"] = recording_name;
       _init_info["stacking"] = _params.at("stacking").dump();
       _init_info["model_files"] = _params.at("model_files").dump();
       _init_info["initial_position"] = _params.at("initial_position").dump();
+      _init_info["tool"] = _params.at("tool").dump();
       _init_info["viewer_initialized"] = "true";
+
     } catch (const exception& ex) {
       _viewer.reset();
       _init_info["viewer_initialized"] = "false";
       _init_info["initialization_error"] = ex.what();
       _error = string("Failed to initialize MachineViewer: ") + ex.what();
+      throw runtime_error(_error);
     }
   }
 
@@ -153,6 +191,57 @@ public:
   };
 
 private:
+  struct setup_tool_t {
+    bool has_geometry = false;
+    double length = 0.0;
+    double diameter = 0.0;
+    double z_offset = 0.0;
+  };
+
+  static setup_tool_t parse_setup_tool(const json& value) {
+    if (!value.is_object()) {
+      throw invalid_argument(
+        "Field 'tool' must be an object and can only contain: length, diameter, z_offset."
+      );
+    }
+
+    for (const auto& [key, element] : value.items()) {
+      (void)element;
+      if (key != "length" && key != "diameter" && key != "z_offset") {
+        throw invalid_argument("Field 'tool' contains unsupported key '" + key + "'.");
+      }
+    }
+
+    const bool has_length = value.contains("length");
+    const bool has_diameter = value.contains("diameter");
+    const bool has_z_offset = value.contains("z_offset");
+
+    if (has_length != has_diameter) {
+      throw invalid_argument(
+        "Field 'tool' must contain both 'length' and 'diameter' together, or neither."
+      );
+    }
+
+    setup_tool_t tool;
+    if (has_length && has_diameter) {
+      if (!value.at("length").is_number() || !value.at("diameter").is_number()) {
+        throw invalid_argument("Fields 'tool.length' and 'tool.diameter' must be numeric.");
+      }
+      tool.has_geometry = true;
+      tool.length = value.at("length").get<double>();
+      tool.diameter = value.at("diameter").get<double>();
+    }
+
+    if (has_z_offset) {
+      if (!value.at("z_offset").is_number()) {
+        throw invalid_argument("Field 'tool.z_offset' must be numeric.");
+      }
+      tool.z_offset = value.at("z_offset").get<double>();
+    }
+
+    return tool;
+  }
+
   static map<string, string> parse_map_field(const json& value, const string& field_name) {
     if (!value.is_object()) {
       throw invalid_argument("Field '" + field_name + "' must be an object.");

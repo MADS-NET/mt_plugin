@@ -48,12 +48,14 @@ struct MachineViewer::Impl {
     std::filesystem::path models_dir,
     linkage_map_t linkages,
     model_map_t model_files,
-    std::string recording_name
+    std::string recording_name,
+    double tool_z_offset
   )
       : _rec(std::move(recording_name)),
         _models_dir(std::move(models_dir)),
         _linkages(std::move(linkages)),
-        _model_files(std::move(model_files)) {
+        _model_files(std::move(model_files)),
+        _tool_z_offset(tool_z_offset) {
     validate_configuration();
     build_entity_paths();
     initialize_viewer();
@@ -79,6 +81,37 @@ struct MachineViewer::Impl {
     ++_tick;
     _rec.set_time_sequence("tick", _tick);
     _rec.log(_root_path + "/metrics/" + sanitize_metric_name(name), rerun::Scalars(value));
+  }
+
+  void load_tool(double length, double diameter) {
+    if (length <= 0.0) {
+      throw std::invalid_argument("MachineViewer tool length must be > 0.");
+    }
+    if (diameter <= 0.0) {
+      throw std::invalid_argument("MachineViewer tool diameter must be > 0.");
+    }
+
+    const auto length_f = static_cast<float>(length);
+    const auto radius_f = static_cast<float>(diameter * 0.5);
+    const auto center = rerun::components::PoseTranslation3D(
+      0.0F,
+      0.0F,
+      -0.5F * length_f + static_cast<float>(_tool_z_offset)
+    );
+
+    const auto tool = rerun::Cylinders3D::from_lengths_and_radii({length_f}, {radius_f})
+                        .with_centers({center})
+                        .with_colors({rerun::Rgba32(255, 165, 0)});
+
+    _rec.log_static(_entity_paths.at(_tool_mount_part) + "/tool", tool);
+  }
+
+  double tool_z_offset() const {
+    return _tool_z_offset;
+  }
+
+  void set_tool_z_offset(double tool_z_offset) {
+    _tool_z_offset = tool_z_offset;
   }
 
 private:
@@ -174,6 +207,20 @@ private:
     for (const auto& part : kParts) {
       resolve_path(part);
     }
+
+    std::unordered_set<std::string> leaf_axes = {"x", "y", "z"};
+    for (const auto& [axis, parent] : _linkages) {
+      (void)axis;
+      if (leaf_axes.count(parent) > 0) {
+        leaf_axes.erase(parent);
+      }
+    }
+
+    if (leaf_axes.size() == 1) {
+      _tool_mount_part = *leaf_axes.begin();
+    } else {
+      _tool_mount_part = "z";
+    }
   }
 
   std::filesystem::path resolve_model_path(const std::string& part) const {
@@ -205,6 +252,8 @@ private:
   model_map_t _model_files;
   std::unordered_map<std::string, std::string> _entity_paths;
   std::string _root_path = "machine";
+  std::string _tool_mount_part = "z";
+  double _tool_z_offset = 0.0;
   std::int64_t _tick = 0;
 };
 
@@ -212,13 +261,15 @@ MachineViewer::MachineViewer(
   std::filesystem::path models_dir,
   linkage_map_t linkages,
   model_map_t model_files,
-  std::string recording_name
+  std::string recording_name,
+  double tool_z_offset
 ) {
   _impl = std::make_unique<Impl>(
     std::move(models_dir),
     std::move(linkages),
     std::move(model_files),
-    std::move(recording_name)
+    std::move(recording_name),
+    tool_z_offset
   );
 }
 
@@ -230,6 +281,18 @@ void MachineViewer::update_position(const std::array<double, 3>& xyz) {
   _impl->update_position(xyz);
 }
 
+void MachineViewer::load_tool(double length, double diameter) {
+  _impl->load_tool(length, diameter);
+}
+
 void MachineViewer::log_scalar(const std::string& name, double value) {
   _impl->log_scalar(name, value);
+}
+
+double MachineViewer::tool_z_offset() const {
+  return _impl->tool_z_offset();
+}
+
+void MachineViewer::set_tool_z_offset(double tool_z_offset) {
+  _impl->set_tool_z_offset(tool_z_offset);
 }

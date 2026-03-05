@@ -15,7 +15,8 @@ public:
     std::filesystem::path models_dir,
     linkage_map_t linkages,
     model_map_t model_files,
-    std::string recording_name = "machine_viewer"
+    std::string recording_name = "machine_viewer",
+    double tool_z_offset = 0.0
   );
 
   ~MachineViewer();
@@ -25,7 +26,10 @@ public:
   MachineViewer& operator=(MachineViewer&&) noexcept;
 
   void update_position(const std::array<double, 3>& xyz);
+  void load_tool(double length, double diameter);
   void log_scalar(const std::string& name, double value);
+  double tool_z_offset() const;
+  void set_tool_z_offset(double tool_z_offset);
 
 private:
   struct Impl;
