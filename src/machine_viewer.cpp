@@ -3,12 +3,15 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <cmath>
 #include <functional>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
+#include <vector>
 
 #include <rerun.hpp>
 
@@ -71,6 +74,21 @@ struct MachineViewer::Impl {
       const auto translation = rerun::components::Translation3D(axis_translation(axis, xyz[i]));
       _rec.log(_entity_paths.at(axis), rerun::Transform3D(translation));
     }
+
+    if (_tool_loaded) {
+      const auto tip = rerun::datatypes::Vec3D(
+        static_cast<float>(xyz[0]),
+        static_cast<float>(xyz[1]),
+        static_cast<float>(xyz[2] - _tool_length + _tool_z_offset)
+      );
+      _tool_tip_trace.emplace_back(tip);
+
+      rerun::components::LineStrip3D strip(_tool_tip_trace);
+      _rec.log(
+        _root_path + "/tool_trace",
+        rerun::LineStrips3D({strip}).with_colors({rerun::Rgba32(255, 165, 0)}).with_radii({0.0025F})
+      );
+    }
   }
 
   void log_scalar(const std::string& name, double value) {
@@ -103,7 +121,26 @@ struct MachineViewer::Impl {
                         .with_centers({center})
                         .with_colors({rerun::Rgba32(255, 165, 0)});
 
+    const bool geometry_changed = !_tool_loaded ||
+                                  std::abs(_tool_length - length) > std::numeric_limits<double>::epsilon() ||
+                                  std::abs(_tool_diameter - diameter) > std::numeric_limits<double>::epsilon();
+
     _rec.log_static(_entity_paths.at(_tool_mount_part) + "/tool", tool);
+    _tool_loaded = true;
+    _tool_length = length;
+    _tool_diameter = diameter;
+    if (geometry_changed) {
+      _tool_tip_trace.clear();
+      _rec.log(_root_path + "/tool_trace", rerun::Clear::FLAT);
+    }
+  }
+
+  void unload_tool() {
+    _tool_loaded = false;
+    _tool_length = 0.0;
+    _tool_tip_trace.clear();
+    _rec.log(_entity_paths.at(_tool_mount_part) + "/tool", rerun::Clear::FLAT);
+    _rec.log(_root_path + "/tool_trace", rerun::Clear::FLAT);
   }
 
   double tool_z_offset() const {
@@ -254,6 +291,10 @@ private:
   std::string _root_path = "machine";
   std::string _tool_mount_part = "z";
   double _tool_z_offset = 0.0;
+  bool _tool_loaded = false;
+  double _tool_length = 0.0;
+  double _tool_diameter = 0.0;
+  std::vector<rerun::datatypes::Vec3D> _tool_tip_trace;
   std::int64_t _tick = 0;
 };
 
@@ -283,6 +324,10 @@ void MachineViewer::update_position(const std::array<double, 3>& xyz) {
 
 void MachineViewer::load_tool(double length, double diameter) {
   _impl->load_tool(length, diameter);
+}
+
+void MachineViewer::unload_tool() {
+  _impl->unload_tool();
 }
 
 void MachineViewer::log_scalar(const std::string& name, double value) {

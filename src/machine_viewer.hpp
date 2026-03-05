@@ -27,6 +27,7 @@ public:
 
   void update_position(const std::array<double, 3>& xyz);
   void load_tool(double length, double diameter);
+  void unload_tool();
   void log_scalar(const std::string& name, double value);
   double tool_z_offset() const;
   void set_tool_z_offset(double tool_z_offset);
