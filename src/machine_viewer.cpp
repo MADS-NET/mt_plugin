@@ -102,10 +102,14 @@ struct MachineViewer::Impl {
   }
 
   void load_tool(double length, double diameter) {
-    if (length <= 0.0) {
+    if (length == 0 || diameter == 0) {
+      unload_tool();
+      return;
+    }
+    if (length < 0.0) {
       throw std::invalid_argument("MachineViewer tool length must be > 0.");
     }
-    if (diameter <= 0.0) {
+    if (diameter < 0.0) {
       throw std::invalid_argument("MachineViewer tool diameter must be > 0.");
     }
 

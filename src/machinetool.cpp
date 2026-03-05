@@ -63,13 +63,10 @@ public:
     }
 
     try {
-      if (!input.contains("position")) {
-        _error = "Input JSON is missing 'position' field.";
-        return return_type::warning;
+      if (input.contains("position")) {
+        const auto position = parse_position(input.at("position"));
+        _viewer->update_position(position);
       }
-
-      const auto position = parse_position(input.at("position"));
-      _viewer->update_position(position);
 
       if (input.contains("tool")) {
         if (!input.at("tool").is_object()) {
