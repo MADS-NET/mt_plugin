@@ -63,6 +63,32 @@ public:
     }
 
     try {
+      if (input.contains("input") && input["input"]["setpoint"].is_array()) {
+        _viewer->log_scalar("setpoint_x", input["input"]["setpoint"][0].get<double>());
+        _viewer->log_scalar("setpoint_y", input["input"]["setpoint"][1].get<double>());
+        _viewer->log_scalar("setpoint_z", input["input"]["setpoint"][2].get<double>());
+      }
+
+      if (input.contains("output")) {
+        auto o = input["output"];
+        if (o.contains("position") && o["position"].is_array()) {
+          _viewer->update_position(o["position"].get<array<double, 3>>());
+          _viewer->log_scalar("output_x", o["position"][0].get<double>());
+          _viewer->log_scalar("output_y", o["position"][1].get<double>());
+          _viewer->log_scalar("output_z", o["position"][2].get<double>());
+        }
+        if (o.contains("speed") && o["speed"].is_array()) { 
+          _viewer->log_scalar("output_speed_x", o["speed"][0].get<double>());
+          _viewer->log_scalar("output_speed_y", o["speed"][1].get<double>());
+          _viewer->log_scalar("output_speed_z", o["speed"][2].get<double>());
+        }
+      }
+    } catch (const exception& ex) {
+      _error = string("Failed to process input: ") + ex.what();
+      return return_type::error;
+    }
+
+    try {
       if (input.contains("position")) {
         const auto position = parse_position(input.at("position"));
         _viewer->update_position(position);

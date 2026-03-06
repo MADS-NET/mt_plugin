@@ -32,6 +32,8 @@ public:
   double tool_z_offset() const;
   void set_tool_z_offset(double tool_z_offset);
 
+  double scale_factor = 0.001; // Default scale factor to convert from millimeters to meters  (viewer only)
+
 private:
   struct Impl;
   std::unique_ptr<Impl> _impl;

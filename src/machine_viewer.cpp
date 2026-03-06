@@ -323,6 +323,9 @@ MachineViewer::MachineViewer(MachineViewer&&) noexcept = default;
 MachineViewer& MachineViewer::operator=(MachineViewer&&) noexcept = default;
 
 void MachineViewer::update_position(const std::array<double, 3>& xyz) {
+  for (auto& v : const_cast<std::array<double, 3>&>(xyz)) {
+    v *= scale_factor; // Convert from millimeters to meters (viewer only)
+  }
   _impl->update_position(xyz);
 }
 
