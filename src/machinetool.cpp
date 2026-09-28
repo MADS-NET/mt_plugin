@@ -328,7 +328,7 @@ private:
                 |___/                                      
 Enable the class as plugin 
 */
-INSTALL_SINK_DRIVER(MachinetoolPlugin, json)
+MADS_REGISTER_PLUGINS(MachinetoolPlugin)
 
 
 /*
