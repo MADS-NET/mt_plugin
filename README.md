@@ -51,6 +51,8 @@ cmake -Bbuild -DCMAKE_INSTALL_PREFIX="$(mads -p)"
 cmake --build build --config Release
 ```
 
+> Note: on Windows, the plugin won't work if you DO NOT compile it in **Release** mode. Recent versions of this repository automatically set the build type to Release, but if you are using an older version, you must explicitly specify it by appending `-DCMAKE_BUILD_TYPE=Release` in the first command above.
+
 Once compiled, provided that you have a running broker and the settings contain a `[machinetool]` section, you may run the plugin from the same termninal in which you have activated the Python venv:
 
 ```sh

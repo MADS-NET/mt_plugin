@@ -16,10 +16,13 @@ cmake_minimum_required(VERSION 3.28)
 if(APPLE AND NOT CMAKE_OSX_DEPLOYMENT_TARGET)
   set(CMAKE_OSX_DEPLOYMENT_TARGET "26.2" CACHE STRING "Minimum macOS deployment target")
 endif()
-project(machinetool VERSION 2.0.0 LANGUAGES CXX)
-if(CMAKE_BUILD_TYPE STREQUAL "")
+# Default to Release. This must happen before project(), which otherwise
+# initializes the cache entry itself. On Windows the plugin must use the same
+# (release) MSVC runtime as the MADS host, or it crashes when loaded.
+if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Choose the type of build." FORCE)
 endif()
+project(machinetool VERSION 2.0.0 LANGUAGES CXX)
 set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
   set(CMAKE_INSTALL_PREFIX "/Users/p4010/usr/local" CACHE PATH "Install path prefix, prepended onto install directories." FORCE)
