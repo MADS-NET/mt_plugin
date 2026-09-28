@@ -7,8 +7,8 @@ This is a Sink plugin for [MADS](https://github.com/MADS-NET/MADS).
 
 This plugin visualizes on [Rerun](https://rerun.io) a 3D model of a machine tool, updating axes positions according to the received commands. It is just a viewer and does not provide any dinamics simulation. Foor that, head to <https://gitbub.com/mads-net/FMU_agent>.
 
-*Required MADS version: 2.0.0.*
-
+> *Required MADS version: 2.4.3.* or later
+> This version won't work with earlier versions of MADS.
 
 ## Supported platforms
 
