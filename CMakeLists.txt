@@ -66,7 +66,7 @@ FetchContent_Declare(json
 )
 
 FetchContent_Declare(rerun_cpp_sdk
-  URL https://github.com/rerun-io/rerun/releases/download/0.31.4/rerun_cpp_sdk.zip
+  URL https://github.com/rerun-io/rerun/releases/download/0.43.2/rerun_cpp_sdk.zip
   EXCLUDE_FROM_ALL
   # Arrow (a rerun dependency) is downloaded as a tarball, so "git apply" in
   # rerun's own PATCH_COMMAND always fails silently. We replace it with a
@@ -92,7 +92,7 @@ FetchContent_MakeAvailable(pugg json rerun_cpp_sdk)
 
 FetchContent_Populate(plugin 
   GIT_REPOSITORY https://github.com/pbosetti/mads_plugin.git
-  GIT_TAG        v2.4-P8
+  GIT_TAG        v2.6-P9
   GIT_SHALLOW    TRUE
   SUBBUILD_DIR ${CMAKE_CURRENT_BINARY_DIR}/_deps/plugin-subbuild
   SOURCE_DIR ${CMAKE_CURRENT_BINARY_DIR}/_deps/plugin-src
