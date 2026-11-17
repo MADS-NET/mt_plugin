@@ -3,6 +3,9 @@ name: Build and Release
 on:
   push:
     branches: [main]
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+-*"
 
 jobs:
   # ────────────────────────────────────────────────────────────────────────────
@@ -116,35 +119,26 @@ jobs:
   release:
     name: Create Release
     needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
       contents: write
 
     steps:
-      - uses: actions/checkout@v4
-
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
           merge-multiple: false
 
-      - name: Compute tag and title
-        id: meta
-        run: |
-          VERSION=$(grep -m1 'project.*VERSION' CMakeLists.txt \
-            | sed 's/.*VERSION \+\([0-9][0-9.]*\).*/\1/')
-          SHORT_SHA="${GITHUB_SHA::8}"
-          echo "tag=v${VERSION}-build.${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
-          echo "title=v${VERSION} (build #${GITHUB_RUN_NUMBER} · ${SHORT_SHA})" >> "$GITHUB_OUTPUT"
-
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.meta.outputs.tag }}
-          name: ${{ steps.meta.outputs.title }}
+          name: ${{ github.ref_name }}
+          # tags like v1.2.3-rc1 are marked as pre-release
+          prerelease: ${{ contains(github.ref_name, '-') }}
           body: |
-            Automated build from [`${{ github.sha }}`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}) on branch `${{ github.ref_name }}`.
+            Automated build from [`${{ github.sha }}`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}) for tag `${{ github.ref_name }}`.
 
             | Artifact | Platform |
             |----------|----------|
