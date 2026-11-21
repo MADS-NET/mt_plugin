@@ -71,7 +71,7 @@ Provided that you have a running broker and the settings contain a `[machinetool
 cd <unzipped folder>
 python -mvenv .venv
 .\.venv\script\activate.ps1
-pip install rerun-sdk
+pip install rerun-sdk==0.43.2
 mads sink lib/machinetool.plugin
 ```
 
@@ -82,7 +82,7 @@ cd <unzipped folder>
 xattr -dr com.apple.quarantine .
 python -mvenv .venv
 source .venv/bin/activate
-pip install rerun-sdk
+pip install rerun-sdk==0.43.2
 mads sink lib/machinetool.plugin
 ```
 
@@ -132,6 +132,9 @@ The plugin supports the following settings in the INI file:
 sub_topic = ["fmu_machine_tool"]
 initial_position = [0, 0, 200]
 tool = {length = 100, diameter = 20, z_offset = 50}
+models_path = "models"
+model_files = {ground = "ground.obj", x = "x_axis.obj", y = "y_axis.obj", z = "z_axis.obj"}
+stacking = {x = "ground", y = "z", z = "x"}
 ```
 
 All settings are optional; if omitted, the default values are used.
